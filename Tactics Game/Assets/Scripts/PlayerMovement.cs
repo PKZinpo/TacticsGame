@@ -29,14 +29,14 @@ public class PlayerMovement : MonoBehaviour {
                 currentMapIndex = i;
                 currentMap = map;
                 currentTilemapOffset = GetTileHeight(transform.position);
-                currentFullOffsets = THV.fullHeight * Mathf.Max(i - 1, 0f);
+                currentFullOffsets = THV.fullHeight * (i - 1);
                 break;
             }
         }
 
         SetPlayerAndSpritePosition();
 
-        Debug.Log("[PlayerMovment] Current map is " + currentMap.name + " and position is " + currentMap.WorldToCell(playerPosition));
+        Debug.Log("[PlayerMovement] Current map is " + currentMap.name + " and position is " + currentMap.WorldToCell(playerPosition));
 
     }
 
@@ -46,6 +46,7 @@ public class PlayerMovement : MonoBehaviour {
     }
 
     private void CheckMovePlayerInput() { // Checks for player input
+        if (moveToDestination) return;
         if (Input.GetKeyDown(KeyCode.W)) {
             CheckIfDestinationIsAvailable(new Vector3Int(1, 0, 0));
         }
@@ -61,46 +62,63 @@ public class PlayerMovement : MonoBehaviour {
     }
     private void CheckIfDestinationIsAvailable(Vector3Int tileDirection) { // Checks if destination is available on tilemap
         Vector3 direction = currentMap.CellToWorld(tileDirection);
-        Vector3 dest = (playerPosition - GetPlayerTotalOffset() + THV.fullHeight * currentMapIndex) + direction;
+        Vector3 dest = playerPosition - GetPlayerTotalOffset() + (THV.fullHeight * currentMapIndex) + direction;
+
         if (DoesTileMapExistWithTile(1, dest)) { // Checks on tilemap of higher index
-            //Debug.Log(currentMap.WorldToCell(dest + THV.fullHeight));
+            Vector3 newDest = dest + THV.fullHeight;
+            currentMapIndex++;
+            currentMap = maps.transform.GetChild(currentMapIndex).GetComponent<Tilemap>();
+            currentTilemapOffset = GetTileHeight(newDest);
+            currentFullOffsets = THV.fullHeight * (currentMapIndex - 1);
+            destination = newDest - (THV.fullHeight * currentMapIndex);
+            moveToDestination = true;
+            Debug.Log(GetPlayerTotalOffset().y);
         }
         else if (CTMF.DoesTileExistOnLevel(dest, currentMap)) { // Checks on current tilemap
-            destination = dest - GetPlayerTotalOffset() + currentFullOffsets + GetTileHeight(dest);
+            //Debug.Log($"Previous total offset {GetPlayerTotalOffset().y}");
+            destination = dest - (THV.fullHeight * currentMapIndex);
             currentTilemapOffset = GetTileHeight(dest);
             moveToDestination = true;
             //Debug.Log("[PlayerMovement] Tile move available");
         }
         else if (DoesTileMapExistWithTile(-1, dest)) { // Checks on tilemap of lower index
-            //Debug.Log(currentMap.WorldToCell(dest - THV.fullHeight));
+            Vector3 newDest = dest - THV.fullHeight;
+            currentMapIndex--;
+            currentMap = maps.transform.GetChild(currentMapIndex).GetComponent<Tilemap>();
+            currentTilemapOffset = GetTileHeight(newDest);
+            currentFullOffsets = THV.fullHeight * (currentMapIndex - 1);
+            destination = newDest - (THV.fullHeight * currentMapIndex);
+            moveToDestination = true;
+            Debug.Log(currentMap.WorldToCell(dest - THV.fullHeight));
         }
         else {
             Debug.Log("[PlayerMovement] Tile move unavailable");
         }
     }
     private void MovePlayer() { // Moves the player
-        transform.position = Vector3.MoveTowards(transform.position, destination - GetPlayerTotalOffset(), playerSpeed * Time.deltaTime);
-        if (transform.position == destination - GetPlayerTotalOffset()) {
+        transform.position = Vector3.MoveTowards(transform.position, destination, playerSpeed * Time.deltaTime);
+        MovePlayerSprite();
+        if (transform.position == destination) {
+            //Debug.Log($"Final total offset {GetPlayerTotalOffset().y}");
             playerPosition = transform.position + GetPlayerTotalOffset();
             moveToDestination = false;
             Debug.Log("[PlayerMovement] Arrived at destination");
         }
     }
     private void MovePlayerSprite() {
-        transform.position = Vector3.MoveTowards(transform.position, destination - GetPlayerTotalOffset(), playerSpeed * Time.deltaTime);
+        transform.GetChild(0).localPosition = Vector3.MoveTowards(transform.GetChild(0).localPosition, GetPlayerTotalOffset(), playerSpeed * Time.deltaTime);
     }
     private void SetPlayerAndSpritePosition() { // Sets parent of player to position (on base layer) and sprite of player to correct position
-        transform.position = CTMF.AlignToTile(transform.position, currentMap) - (currentFullOffsets + THV.fullHeight);
+        transform.position = CTMF.AlignToTile(transform.position, currentMap) - (THV.fullHeight * currentMapIndex);
         transform.GetChild(0).localPosition = GetPlayerTotalOffset();
         playerPosition = transform.position + GetPlayerTotalOffset();
     }
     private bool DoesTileMapExistWithTile(int val, Vector3 pos) { // Checks if tilemap exists and if tile exists on the tilemap
-        if (maps.transform.GetChild(currentMapIndex + val) != null) {
-            return CTMF.DoesTileExistOnLevel(pos + THV.fullHeight, maps.transform.GetChild(currentMapIndex + val).GetComponent<Tilemap>());
+
+        if (currentMapIndex + val <= maps.transform.childCount - 1) {
+            return CTMF.DoesTileExistOnLevel(pos + (THV.fullHeight * val), maps.transform.GetChild(currentMapIndex + val).GetComponent<Tilemap>());
         }
-        else {
-            return false;
-        }
+        return false;
     }
     private Vector3 GetPlayerTotalOffset() { // Returns total player offset
         return currentFullOffsets + currentTilemapOffset;
